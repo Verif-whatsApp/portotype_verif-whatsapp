@@ -1,13 +1,15 @@
 import logging
+from typing import Any, Dict
 
 import httpx
-from app.services.whatsapp import send_whatsapp_message
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, Request, Response
 
-from app.config import settings
-from app.services.formatting import format_verdict_response
+from app.config import get_settings
+from app.services.formatting import format_response
 from app.services.matching import find_best_match
 from app.services.ocr import extract_text_from_image
+from app.services.whatsapp import send_whatsapp_message
+from app.db.session import SessionLocal  # Assurez-vous que c'est le bon chemin
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -15,9 +17,13 @@ router = APIRouter()
 
 async def process_and_reply(text: str, sender: str) -> None:
     """Tâche de fond pour traiter le message et envoyer la réponse."""
+    settings = get_settings()
     try:
-        match_result = find_best_match(text)
-        response_text = format_verdict_response(match_result)
+        # Mypy indique que find_best_match attend une session (Session) et le texte
+        with SessionLocal() as db:
+            match_result = find_best_match(db, text)
+
+        response_text = format_response(match_result)
         await send_whatsapp_message(sender, response_text)
     except Exception as e:
         logger.error(f"Erreur lors du traitement du message : {e}")
@@ -27,6 +33,7 @@ async def process_and_reply(text: str, sender: str) -> None:
 
 async def handle_image_message(media_id: str, sender: str) -> None:
     """Télécharge l'image depuis Meta, extrait le texte, et lance le matching."""
+    settings = get_settings()
     url_info = f"https://graph.facebook.com/{settings.WHATSAPP_API_VERSION}/{media_id}"
     headers = {"Authorization": f"Bearer {settings.WHATSAPP_ACCESS_TOKEN}"}
 
@@ -46,8 +53,7 @@ async def handle_image_message(media_id: str, sender: str) -> None:
 
             if not text:
                 await send_whatsapp_message(
-                    sender,
-                    "📸 Désolé, nous n'avons pas réussi à lire le texte de cette image.",
+                    sender, "📸 Désolé, nous n'avons pas réussi à lire le texte de cette image."
                 )
                 return
 
@@ -67,6 +73,7 @@ async def verify_webhook(
     challenge: str = Query(None, alias="hub.challenge"),
 ) -> Response:
     """Vérification du webhook par Meta."""
+    settings = get_settings()
     if mode == "subscribe" and token == settings.WHATSAPP_VERIFY_TOKEN:
         logger.info("Webhook vérifié avec succès par Meta.")
         return Response(content=challenge, media_type="text/plain")
@@ -74,7 +81,7 @@ async def verify_webhook(
 
 
 @router.post("/webhook")
-async def receive_message(request: Request, background_tasks: BackgroundTasks) -> dict:
+async def receive_message(request: Request, background_tasks: BackgroundTasks) -> Dict[str, Any]:
     """Réception des messages entrants de WhatsApp."""
     body = await request.json()
 
