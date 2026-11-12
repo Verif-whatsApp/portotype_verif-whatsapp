@@ -14,8 +14,8 @@ Sur GitHub, créez un dépôt nommé par exemple `verif-whatsapp` (ou le nom que
 ### 0.2 Cloner localement
 
 ```bash
-git clone git@github.com:organizations/verif-whatsapp.git
-cd verif-whatsapp
+git clone https://github.com/Verif-whatsApp/portotype_verif-whatsapp.git
+cd portotype_verif-whatsapp
 ```
 
 ---
@@ -244,8 +244,8 @@ en offrant un point de vérification instantané, accessible directement depuis 
 
 ```bash
 # 1. Cloner le dépôt
-git clone git@github.com:<org>/verif-whatsapp.git
-cd verif-whatsapp
+git clone https://github.com/Verif-whatsApp/portotype_verif-whatsapp.git
+cd portotype_verif-whatsapp
 
 # 2. Créer un environnement virtuel
 python -m venv .venv
