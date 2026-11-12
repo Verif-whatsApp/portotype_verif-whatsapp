@@ -274,7 +274,7 @@ portotype_verif-whatsapp/
 ### MVP (6 semaines)
 
 - [x] Initialisation du projet (structure, config, CI)
-- [ ] Configuration (`config.py`) et point d'entrée (`main.py`)
+- [x] Configuration (`config.py`) et point d'entrée (`main.py`, endpoint `/health`)
 - [ ] Modèles de données et base de connaissances
 - [ ] Moteur de correspondance + tests
 - [ ] Formatage des réponses + tests
