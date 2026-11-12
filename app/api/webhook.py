@@ -1,15 +1,15 @@
 import logging
-from typing import Any, Dict
+from typing import Any
 
 import httpx
+from app.services.whatsapp import send_whatsapp_message
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, Request, Response
 
 from app.config import get_settings
+from app.db.session import get_session_factory
 from app.services.formatting import format_response
 from app.services.matching import find_best_match
 from app.services.ocr import extract_text_from_image
-from app.services.whatsapp import send_whatsapp_message
-from app.db.session import SessionLocal  # Assurez-vous que c'est le bon chemin
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -17,9 +17,9 @@ router = APIRouter()
 
 async def process_and_reply(text: str, sender: str) -> None:
     """Tâche de fond pour traiter le message et envoyer la réponse."""
-    settings = get_settings()
     try:
-        # Mypy indique que find_best_match attend une session (Session) et le texte
+        # Utilisation de votre factory de session
+        SessionLocal = get_session_factory()
         with SessionLocal() as db:
             match_result = find_best_match(db, text)
 
@@ -34,8 +34,9 @@ async def process_and_reply(text: str, sender: str) -> None:
 async def handle_image_message(media_id: str, sender: str) -> None:
     """Télécharge l'image depuis Meta, extrait le texte, et lance le matching."""
     settings = get_settings()
-    url_info = f"https://graph.facebook.com/{settings.WHATSAPP_API_VERSION}/{media_id}"
-    headers = {"Authorization": f"Bearer {settings.WHATSAPP_ACCESS_TOKEN}"}
+
+    url_info = f"https://graph.facebook.com/{settings.whatsapp_api_version}/{media_id}"
+    headers = {"Authorization": f"Bearer {settings.whatsapp_access_token}"}
 
     try:
         async with httpx.AsyncClient() as client:
@@ -74,14 +75,15 @@ async def verify_webhook(
 ) -> Response:
     """Vérification du webhook par Meta."""
     settings = get_settings()
-    if mode == "subscribe" and token == settings.WHATSAPP_VERIFY_TOKEN:
+
+    if mode == "subscribe" and token == settings.whatsapp_verify_token:
         logger.info("Webhook vérifié avec succès par Meta.")
         return Response(content=challenge, media_type="text/plain")
     raise HTTPException(status_code=403, detail="Token de vérification invalide")
 
 
 @router.post("/webhook")
-async def receive_message(request: Request, background_tasks: BackgroundTasks) -> Dict[str, Any]:
+async def receive_message(request: Request, background_tasks: BackgroundTasks) -> dict[str, Any]:
     """Réception des messages entrants de WhatsApp."""
     body = await request.json()
 
