@@ -7,7 +7,10 @@ from app.services.formatting import (
     DEFAULT_LANGUAGE,
     MESSAGES,
     Messages,
+    format_error,
+    format_image_error,
     format_response,
+    format_unreadable_image,
     format_unsupported,
     format_unverified,
     format_verification,
@@ -133,6 +136,9 @@ def test_a_new_language_only_needs_a_new_entry(monkeypatch: pytest.MonkeyPatch) 
         unverified_title="NOT VERIFIED",
         unverified_body="Not verified yet.",
         unsupported="Cannot process this.",
+        error="Error.",
+        unreadable_image="Unreadable.",
+        image_error="Image error.",
         automated_notice="Automated reply.",
     )
     monkeypatch.setitem(MESSAGES, "en", english)
@@ -149,3 +155,21 @@ def test_every_language_covers_every_verdict() -> None:
 
 def test_default_language_is_available() -> None:
     assert DEFAULT_LANGUAGE in MESSAGES
+
+
+def test_technical_error_message_keeps_the_wording_of_the_webhook() -> None:
+    assert (
+        format_error() == "Désolé, une erreur technique est survenue. Veuillez réessayer plus tard."
+    )
+
+
+def test_image_messages_suggest_what_to_do() -> None:
+    assert format_unreadable_image().startswith("📸 Désolé, nous n'avons pas réussi à lire")
+    assert "copier-coller" in format_unreadable_image()
+    assert format_image_error() == "📸 Une erreur est survenue lors de l'analyse de l'image."
+
+
+def test_new_messages_fall_back_to_french() -> None:
+    assert format_error("yo") == format_error()
+    assert format_unreadable_image("yo") == format_unreadable_image()
+    assert format_image_error("yo") == format_image_error()

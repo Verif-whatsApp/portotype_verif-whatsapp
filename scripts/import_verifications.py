@@ -1,53 +1,40 @@
-import json
-import logging
+"""Importe la base de connaissances de vérification dans la base de données.
+
+Usage :
+    python scripts/import_verifications.py                      # data/verifications.json
+    python scripts/import_verifications.py data/autre_fichier.json
+
+L'import est répétable : les affirmations déjà présentes sont ignorées.
+"""
+
+import argparse
+import sys
+from collections.abc import Sequence
 from pathlib import Path
 
-from sqlalchemy.orm import Session
+from app.db.session import get_session_factory, init_db
+from app.services.importer import KnowledgeBaseError, import_verifications, load_entries
 
-from app.db.session import SessionLocal, engine
-from app.models.verification import Base, Verification
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+DEFAULT_FILE = Path("data/verifications.json")
 
 
-def import_data() -> None:
-    Base.metadata.create_all(bind=engine)
+def main(argv: Sequence[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0] if __doc__ else None)
+    parser.add_argument("file", nargs="?", type=Path, default=DEFAULT_FILE, help="fichier JSON")
+    args = parser.parse_args(argv)
 
-    data_file = Path("data/verifications.json")
-    if not data_file.exists():
-        logger.error(f"Fichier introuvable : {data_file}")
-        return
-
-    with open(data_file, encoding="utf-8") as f:
-        verifications = json.load(f)
-
-    db: Session = SessionLocal()
     try:
-        count = 0
-        for item in verifications:
-            existing = (
-                db.query(Verification).filter(Verification.claim_text == item["claim_text"]).first()
-            )
-            if not existing:
-                verif = Verification(
-                    claim_text=item["claim_text"],
-                    verdict=item["verdict"],
-                    explanation=item["explanation"],
-                    source_name=item["source_name"],
-                    source_url=item.get("source_url"),
-                    language=item.get("language", "fr"),
-                )
-                db.add(verif)
-                count += 1
-        db.commit()
-        logger.info(f"✅ {count} vérifications importées avec succès.")
-    except Exception as e:
-        db.rollback()
-        logger.error(f"Erreur lors de l'importation : {e}")
-    finally:
-        db.close()
+        entries = load_entries(args.file)
+        init_db()
+        with get_session_factory()() as session:
+            report = import_verifications(session, entries)
+    except KnowledgeBaseError as exc:
+        print(f"❌ {exc}", file=sys.stderr)
+        return 1
+
+    print(f"✅ {report.added} vérification(s) importée(s), {report.skipped} déjà présente(s).")
+    return 0
 
 
 if __name__ == "__main__":
-    import_data()
+    raise SystemExit(main())
