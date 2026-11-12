@@ -21,19 +21,13 @@ async def process_and_reply(text: str, sender: str) -> None:
         await send_whatsapp_message(sender, response_text)
     except Exception as e:
         logger.error(f"Erreur lors du traitement du message : {e}")
-        error_msg = (
-            "Désolé, une erreur technique est survenue. "
-            "Veuillez réessayer plus tard."
-        )
+        error_msg = "Désolé, une erreur technique est survenue. Veuillez réessayer plus tard."
         await send_whatsapp_message(sender, error_msg)
 
 
 async def handle_image_message(media_id: str, sender: str) -> None:
     """Télécharge l'image depuis Meta, extrait le texte, et lance le matching."""
-    url_info = (
-        f"https://graph.facebook.com/{settings.WHATSAPP_API_VERSION}/"
-        f"{media_id}"
-    )
+    url_info = f"https://graph.facebook.com/{settings.WHATSAPP_API_VERSION}/{media_id}"
     headers = {"Authorization": f"Bearer {settings.WHATSAPP_ACCESS_TOKEN}"}
 
     try:
@@ -80,9 +74,7 @@ async def verify_webhook(
 
 
 @router.post("/webhook")
-async def receive_message(
-    request: Request, background_tasks: BackgroundTasks
-) -> dict:
+async def receive_message(request: Request, background_tasks: BackgroundTasks) -> dict:
     """Réception des messages entrants de WhatsApp."""
     body = await request.json()
 
@@ -100,16 +92,12 @@ async def receive_message(
                 if msg_type == "text":
                     text_content = message["text"]["body"]
                     logger.info(f"Message reçu de {sender} : {text_content}")
-                    background_tasks.add_task(
-                        process_and_reply, text_content, sender
-                    )
+                    background_tasks.add_task(process_and_reply, text_content, sender)
 
                 elif msg_type == "image":
                     media_id = message["image"]["id"]
                     logger.info(f"Image reçue de {sender} (ID: {media_id})")
-                    background_tasks.add_task(
-                        handle_image_message, media_id, sender
-                    )
+                    background_tasks.add_task(handle_image_message, media_id, sender)
 
         except (IndexError, KeyError) as e:
             logger.error(f"Erreur de parsing du payload WhatsApp : {e}")

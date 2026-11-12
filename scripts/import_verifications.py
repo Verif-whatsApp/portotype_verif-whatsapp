@@ -27,9 +27,7 @@ def import_data() -> None:
         count = 0
         for item in verifications:
             existing = (
-                db.query(Verification)
-                .filter(Verification.claim_text == item["claim_text"])
-                .first()
+                db.query(Verification).filter(Verification.claim_text == item["claim_text"]).first()
             )
             if not existing:
                 verif = Verification(
@@ -49,6 +47,7 @@ def import_data() -> None:
         logger.error(f"Erreur lors de l'importation : {e}")
     finally:
         db.close()
+
 
 if __name__ == "__main__":
     import_data()
