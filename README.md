@@ -21,6 +21,7 @@
 - [Installation](#installation)
 - [Configuration](#configuration)
 - [Utilisation](#utilisation)
+- [Connecter WhatsApp](#connecter-whatsapp)
 - [Tests](#tests)
 - [Structure du projet](#structure-du-projet)
 - [Feuille de route](#feuille-de-route)
@@ -67,7 +68,7 @@ Ne partagez pas ce message.
 | ID | Fonctionnalité | Statut |
 |----|----------------|--------|
 | F1 | Réception de messages texte | 🚧 En cours |
-| F2 | Réception d'images (captures d'écran) avec OCR | ⏳ Planifié |
+| F2 | Réception d'images (captures d'écran) avec OCR | 🚧 En cours |
 | F3 | Base de connaissances de vérification | 🚧 En cours |
 | F4 | Moteur de correspondance (fuzzy matching) | 🚧 En cours |
 | F5 | Formatage standardisé des réponses | 🚧 En cours |
@@ -122,7 +123,7 @@ Utilisateur WhatsApp
   - Linux : `sudo apt install tesseract-ocr tesseract-ocr-fra`
   - macOS : `brew install tesseract tesseract-lang`
   - Windows : [installateur officiel](https://github.com/UB-Mannheim/tesseract/wiki)
-- **Compte WhatsApp Business API** (Meta) — pour tester le webhook en conditions réelles. Le développement local fonctionne sans, via simulation.
+- **Compte développeur Meta** (gratuit) — uniquement pour tester avec le vrai WhatsApp, voir [Connecter WhatsApp](#connecter-whatsapp). Le développement local fonctionne sans, via simulation.
 
 ## Installation
 
@@ -152,11 +153,12 @@ cp .env.example .env
 Éditez le fichier `.env` avec vos identifiants :
 
 ```bash
-# WhatsApp Business API (Meta)
-WHATSAPP_VERIFY_TOKEN=change-me-verify-token
+# WhatsApp Business Platform / API Cloud (Meta)
+WHATSAPP_VERIFY_TOKEN=change-me-verify-token   # à inventer, à saisir aussi chez Meta
 WHATSAPP_ACCESS_TOKEN=change-me-access-token
 WHATSAPP_PHONE_NUMBER_ID=change-me-phone-number-id
-WHATSAPP_API_VERSION=v21.0
+WHATSAPP_APP_SECRET=change-me-app-secret       # vérifie la signature des requêtes de Meta
+WHATSAPP_API_VERSION=v25.0
 
 # Application
 APP_ENV=development
@@ -201,11 +203,78 @@ FastAPI génère automatiquement la documentation interactive :
 
 ### Importer la base de connaissances
 
-> 🚧 Script à venir (voir la feuille de route).
+Le fichier JSON contient une liste de vérifications (voir [`data/verifications.example.json`](data/verifications.example.json) pour le format). L'import est répétable : les affirmations déjà présentes sont ignorées, et une entrée invalide annule tout l'import avec un message précis.
 
 ```bash
-python scripts/import_verifications.py
+python scripts/import_verifications.py                  # data/verifications.json
+python scripts/import_verifications.py data/autre_fichier.json
 ```
+
+> ⚠️ `data/verifications.example.json` ne contient que des **entrées fictives**, pour tester. La vraie base (`data/verifications.json`) doit contenir des vérifications réelles, chacune avec sa source.
+
+## Connecter WhatsApp
+
+### Faut-il WhatsApp Business ?
+
+- **Les utilisateurs** qui transfèrent un message au robot gardent leur WhatsApp habituel
+  (WhatsApp Messenger) : rien à installer ni à changer de leur côté.
+- **Le numéro du robot**, lui, doit être enregistré sur la **plateforme WhatsApp Business de Meta
+  (API Cloud)**. Ce n'est pas l'application « WhatsApp Business » du téléphone : c'est le service
+  pour développeurs, qui permet à un programme d'envoyer et de recevoir des messages.
+- Un numéro enregistré sur l'API ne peut plus servir dans l'application WhatsApp, et un numéro
+  déjà utilisé sur WhatsApp doit d'abord y être supprimé. **N'utilisez jamais votre numéro personnel**.
+
+### Étape 1 : tester avec le numéro de test de Meta (gratuit)
+
+Meta fournit un numéro de test qui peut écrire à 5 numéros que vous déclarez (le vôtre, par
+exemple). Vous discutez alors avec le robot depuis votre WhatsApp habituel.
+
+1. Sur [developers.facebook.com](https://developers.facebook.com), créez une application de type
+   *Business* et ajoutez-y le produit **WhatsApp**.
+2. Dans la page de configuration de l'API WhatsApp, relevez l'**identifiant du numéro de
+   téléphone** (`WHATSAPP_PHONE_NUMBER_ID`) et le **jeton d'accès** temporaire
+   (`WHATSAPP_ACCESS_TOKEN`, il expire vite en mode test), puis ajoutez votre numéro dans la
+   liste des destinataires.
+3. Dans les paramètres de base de l'application, relevez la **clé secrète**
+   (`WHATSAPP_APP_SECRET`).
+4. Inventez un `WHATSAPP_VERIFY_TOKEN` (une chaîne secrète quelconque).
+5. Exposez votre serveur en HTTPS (par exemple avec `ngrok http 8000` ou `cloudflared`), puis
+   enregistrez chez Meta l'URL de rappel `https://<votre-adresse>/webhook` avec votre jeton de
+   vérification, et abonnez-vous au champ **messages**.
+6. Écrivez au numéro de test depuis votre WhatsApp.
+
+> Les intitulés exacts de l'interface Meta évoluent : suivez la documentation officielle
+> « WhatsApp Business Platform > Get started » si un libellé a changé.
+
+### Étape 2 : production
+
+- Un **numéro dédié** au robot, non enregistré sur WhatsApp.
+- La **vérification de l'entreprise** dans Meta Business Manager, nécessaire pour écrire à
+  n'importe quel numéro (le numéro de test est limité à 5 destinataires).
+- Un **jeton d'accès permanent** (utilisateur système), à la place du jeton temporaire.
+- `APP_ENV=production` : le webhook refuse alors toutes les notifications si `WHATSAPP_APP_SECRET` est vide.
+
+### Tester sans compte Meta (simulation)
+
+Sans `WHATSAPP_ACCESS_TOKEN` (et hors production), le robot écrit ses réponses dans les logs du
+serveur au lieu de les envoyer. Le simulateur envoie un message signé comme le ferait Meta :
+
+```bash
+python scripts/import_verifications.py data/verifications.example.json
+make run                                  # dans un premier terminal
+python scripts/simulate_webhook.py "EXEMPLE FICTIF : une rumeur inventée pour tester le robot de vérification WhatsApp"
+```
+
+La réponse apparaît dans le terminal du serveur (`[simulation] réponse pour ***0000 : ...`).
+Si `WHATSAPP_APP_SECRET` est défini dans `.env`, le simulateur signe ses requêtes avec.
+
+### Sécurité et confidentialité
+
+- Chaque requête est authentifiée par la signature `X-Hub-Signature-256` (clé secrète de
+  l'application) : sans elle, n'importe qui pourrait faire répondre le robot.
+- Le contenu des messages et les numéros complets ne sont **jamais écrits dans les logs** et rien
+  n'est conservé après la réponse, sauf l'identifiant du message, gardé en mémoire pour ignorer
+  les renvois de Meta.
 
 ## Tests
 
@@ -230,7 +299,7 @@ make format
 
 ## Structure du projet
 
-Structure cible : les modules sont ajoutés au fil de la [feuille de route](#feuille-de-route).
+Les fichiers marqués 🚧 restent à écrire (voir la [feuille de route](#feuille-de-route)).
 
 ```
 portotype_verif-whatsapp/
@@ -238,28 +307,32 @@ portotype_verif-whatsapp/
 │   └── workflows/
 │       └── ci.yml                  # Intégration continue
 ├── app/
-│   ├── main.py                     # Point d'entrée FastAPI
+│   ├── main.py                     # Point d'entrée FastAPI (démarrage, routes)
 │   ├── config.py                   # Variables d'environnement
+│   ├── security.py                 # Signature des requêtes de Meta, comparaison de jetons
 │   ├── api/
-│   │   └── webhook.py              # Réception des webhooks WhatsApp
+│   │   └── webhook.py              # GET (vérification Meta) et POST (messages)
+│   ├── schemas/
+│   │   └── whatsapp.py             # Format des notifications de Meta
 │   ├── services/
-│   │   ├── whatsapp.py             # Envoi de messages via l'API Meta
+│   │   ├── bot.py                  # Traitement d'un message : vérification et réponse
+│   │   ├── whatsapp.py             # Client de l'API Meta (envoi, lecture, médias)
 │   │   ├── matching.py             # Moteur de correspondance
 │   │   ├── ocr.py                  # Extraction de texte des images
-│   │   └── formatting.py           # Formatage des réponses
+│   │   ├── formatting.py           # Formatage des réponses
+│   │   └── importer.py             # Import de la base de connaissances
 │   ├── models/
 │   │   └── verification.py         # Modèles SQLAlchemy
 │   └── db/
-│       ├── session.py              # Connexion base de données
-│       └── seed.py                 # Alimentation initiale
+│       ├── base.py                 # Base déclarative
+│       └── session.py              # Connexion base de données
 ├── data/
-│   └── verifications.json          # Base de connaissances initiale
+│   ├── verifications.example.json  # Exemple FICTIF du format
+│   └── verifications.json          # 🚧 Vraie base de connaissances (500 cas visés)
 ├── scripts/
-│   └── import_verifications.py     # Import des données
-├── tests/
-│   ├── test_matching.py
-│   ├── test_formatting.py
-│   └── test_webhook.py
+│   ├── import_verifications.py     # Import des données
+│   └── simulate_webhook.py         # Simule un message WhatsApp (sans compte Meta)
+├── tests/                          # Tests unitaires et d'intégration
 ├── .env.example
 ├── .gitignore
 ├── .pre-commit-config.yaml
@@ -278,8 +351,10 @@ portotype_verif-whatsapp/
 - [x] Modèles de données (table `verifications`, session SQLAlchemy)
 - [x] Moteur de correspondance + tests
 - [x] Formatage des réponses + tests
-- [ ] Webhook WhatsApp
-- [ ] Envoi de messages via l'API Meta
+- [x] Webhook WhatsApp (vérification Meta, signature, réception)
+- [x] Envoi de messages via l'API Meta
+- [x] OCR des captures d'écran (Tesseract)
+- [ ] Test avec le numéro de test de Meta (conditions réelles)
 - [ ] Base de connaissances initiale (500 cas)
 - [ ] Tests internes et pilote fermé
 
