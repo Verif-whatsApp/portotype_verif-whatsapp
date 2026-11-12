@@ -68,10 +68,10 @@ Ne partagez pas ce message.
 |----|----------------|--------|
 | F1 | Réception de messages texte | 🚧 En cours |
 | F2 | Réception d'images (captures d'écran) avec OCR | ⏳ Planifié |
-| F3 | Base de connaissances de vérification | ⏳ Planifié |
-| F4 | Moteur de correspondance (fuzzy matching) | ⏳ Planifié |
-| F5 | Formatage standardisé des réponses | ⏳ Planifié |
-| F6 | Interface et réponses en français | ⏳ Planifié |
+| F3 | Base de connaissances de vérification | 🚧 En cours |
+| F4 | Moteur de correspondance (fuzzy matching) | 🚧 En cours |
+| F5 | Formatage standardisé des réponses | 🚧 En cours |
+| F6 | Interface et réponses en français | 🚧 En cours |
 
 **Hors périmètre MVP** : messages vocaux, recherche web en temps réel, interface d'administration, multilingue, application mobile autonome.
 
@@ -275,9 +275,9 @@ portotype_verif-whatsapp/
 
 - [x] Initialisation du projet (structure, config, CI)
 - [x] Configuration (`config.py`) et point d'entrée (`main.py`, endpoint `/health`)
-- [ ] Modèles de données et base de connaissances
-- [ ] Moteur de correspondance + tests
-- [ ] Formatage des réponses + tests
+- [x] Modèles de données (table `verifications`, session SQLAlchemy)
+- [x] Moteur de correspondance + tests
+- [x] Formatage des réponses + tests
 - [ ] Webhook WhatsApp
 - [ ] Envoi de messages via l'API Meta
 - [ ] Base de connaissances initiale (500 cas)
