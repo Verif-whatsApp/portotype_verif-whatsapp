@@ -1,12 +1,8 @@
-
----
-
-```markdown
 # Vérif'WhatsApp
 
 > Robot de fact-checking WhatsApp pour l'Afrique de l'Ouest — vérifiez une rumeur sans quitter WhatsApp.
 
-[![CI](https://github.com/organizations/Verif-whatsApp/actions/workflows/ci.yml/badge.svg)](https://github.com/organizations/verif-whatsapp/actions/workflows/ci.yml)
+[![CI](https://github.com/Verif-whatsApp/portotype_verif-whatsapp/actions/workflows/ci.yml/badge.svg)](https://github.com/Verif-whatsApp/portotype_verif-whatsapp/actions/workflows/ci.yml)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Code style: ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
@@ -115,7 +111,7 @@ Utilisateur WhatsApp
 | Base de connaissances | SQLite (MVP) → PostgreSQL (scale) | Aucun serveur dédié au démarrage |
 | OCR | Tesseract | Gratuit, fiable sur captures d'écran WhatsApp |
 | Matching | RapidFuzz | Similarité textuelle rapide, pas d'IA nécessaire pour le MVP |
-| Qualité | Ruff, Black, Mypy, Pytest, Pre-commit | Standards de l'écosystème Python |
+| Qualité | Ruff (lint + formatage), Mypy, Pytest, Pre-commit | Standards de l'écosystème Python |
 | CI/CD | GitHub Actions | Intégration native au dépôt |
 
 ## Prérequis
@@ -132,8 +128,8 @@ Utilisateur WhatsApp
 
 ```bash
 # 1. Cloner le dépôt
-git clone git@github.com:organizations/verif-whatsapp.git
-cd verif-whatsapp
+git clone https://github.com/Verif-whatsApp/portotype_verif-whatsapp.git
+cd portotype_verif-whatsapp
 
 # 2. Créer un environnement virtuel
 python -m venv .venv
@@ -205,6 +201,8 @@ FastAPI génère automatiquement la documentation interactive :
 
 ### Importer la base de connaissances
 
+> 🚧 Script à venir (voir la feuille de route).
+
 ```bash
 python scripts/import_verifications.py
 ```
@@ -232,8 +230,10 @@ make format
 
 ## Structure du projet
 
+Structure cible : les modules sont ajoutés au fil de la [feuille de route](#feuille-de-route).
+
 ```
-verif-whatsapp/
+portotype_verif-whatsapp/
 ├── .github/
 │   └── workflows/
 │       └── ci.yml                  # Intégration continue
@@ -305,13 +305,13 @@ Les contributions sont bienvenues ! Pour contribuer :
 ### Conventions
 
 - **Commits** : [Conventional Commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`, `chore:`, `docs:`, `test:`, `refactor:`).
-- **Style** : Ruff + Black (configurés dans `pyproject.toml`).
+- **Style** : Ruff, lint et formatage (configuré dans `pyproject.toml`).
 - **Types** : Mypy en mode strict.
 - **Tests** : Toute nouvelle fonctionnalité doit être accompagnée de tests.
 
 ### Signaler un bug
 
-Ouvrez une [issue](https://github.com/organizations/verif-whatsapp/issues) en décrivant :
+Ouvrez une [issue](https://github.com/Verif-whatsApp/portotype_verif-whatsapp/issues) en décrivant :
 - Le comportement attendu
 - Le comportement observé
 - Les étapes pour reproduire
@@ -323,32 +323,11 @@ Ce projet est distribué sous licence **MIT**. Voir le fichier [LICENSE](LICENSE
 
 ## Contact
 
-- **Auteur** : `<Votre nom>`
-- **Organisation** : `<Votre organisation>`
-- **Email** : `<votre-email@exemple.com>`
-- **Dépôt** : [github.com/organizations/verif-whatsapp](https://github.com/organizations/verif-whatsapp)
+- **Organisation** : Shalom Digital Solutions
+- **Dépôt** : [github.com/Verif-whatsApp/portotype_verif-whatsapp](https://github.com/Verif-whatsApp/portotype_verif-whatsapp)
 
 ---
 
 <p align="center">
   Fait avec ❤️ pour l'Afrique de l'Ouest
 </p>
-```
-
----
-
-### Points à personnaliser avant de pousser
-
-1. **Remplacez `organizations`** par le nom réel de votre organisation GitHub (dans les badges, les liens, la section Contact).
-2. **Remplacez `<Votre nom>` et `<votre-email@exemple.com>`** dans la section Contact.
-3. **Vérifiez le nom du dépôt** (`verif-whatsapp`) partout — s'il diffère, faites un rechercher/remplacer.
-4. **La licence** : si vous choisissez Apache 2.0 au lieu de MIT, mettez à jour le badge et la section Licence en conséquence.
-5. **Les statuts de la feuille de route** : ajustez les `[x]` / `[ ]` selon l'état réel du projet.
-
-Une fois ces personnalisations faites, poussez :
-
-```bash
-git add README.md
-git commit -m "docs: ajout du README complet"
-git push origin main
-```
