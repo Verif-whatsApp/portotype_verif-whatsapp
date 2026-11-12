@@ -53,4 +53,10 @@ asyncio_default_fixture_loop_scope = "function"
 [tool.mypy]
 python_version = "3.11"
 strict = true
+
+# `ignore_missing_imports` global masquait les modules du projet introuvables (la CI restait
+# verte alors que le webhook importait un fichier inexistant). On ne le tolère que pour les
+# bibliothèques sans annotations de types.
+[[tool.mypy.overrides]]
+module = ["pytesseract.*"]
 ignore_missing_imports = true
