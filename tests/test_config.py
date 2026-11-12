@@ -56,3 +56,30 @@ def test_invalid_environment_is_rejected(monkeypatch: pytest.MonkeyPatch) -> Non
 
     with pytest.raises(ValidationError):
         make_settings()
+
+
+def test_whatsapp_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
+    for name in ("WHATSAPP_API_VERSION", "WHATSAPP_APP_SECRET"):
+        monkeypatch.delenv(name, raising=False)
+
+    settings = make_settings()
+
+    assert settings.whatsapp_api_version == "v25.0"
+    assert settings.whatsapp_app_secret == ""
+
+
+def test_missing_whatsapp_settings_lists_empty_variables(monkeypatch: pytest.MonkeyPatch) -> None:
+    for name in (
+        "WHATSAPP_VERIFY_TOKEN",
+        "WHATSAPP_ACCESS_TOKEN",
+        "WHATSAPP_PHONE_NUMBER_ID",
+        "WHATSAPP_APP_SECRET",
+    ):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("WHATSAPP_VERIFY_TOKEN", "x")
+    monkeypatch.setenv("WHATSAPP_PHONE_NUMBER_ID", "123")
+
+    assert make_settings().missing_whatsapp_settings == [
+        "WHATSAPP_ACCESS_TOKEN",
+        "WHATSAPP_APP_SECRET",
+    ]

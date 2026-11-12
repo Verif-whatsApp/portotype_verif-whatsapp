@@ -25,7 +25,9 @@ class Settings(BaseSettings):
     whatsapp_verify_token: str = ""
     whatsapp_access_token: str = ""
     whatsapp_phone_number_id: str = ""
-    whatsapp_api_version: str = "v21.0"
+    # Clé secrète de l'application Meta : sert à vérifier la signature des requêtes du webhook
+    whatsapp_app_secret: str = ""
+    whatsapp_api_version: str = "v25.0"
 
     # Application
     app_env: Literal["development", "test", "production"] = "development"
@@ -48,6 +50,17 @@ class Settings(BaseSettings):
     @property
     def is_production(self) -> bool:
         return self.app_env == "production"
+
+    @property
+    def missing_whatsapp_settings(self) -> list[str]:
+        """Noms des variables WhatsApp non renseignées."""
+        required = {
+            "WHATSAPP_VERIFY_TOKEN": self.whatsapp_verify_token,
+            "WHATSAPP_ACCESS_TOKEN": self.whatsapp_access_token,
+            "WHATSAPP_PHONE_NUMBER_ID": self.whatsapp_phone_number_id,
+            "WHATSAPP_APP_SECRET": self.whatsapp_app_secret,
+        }
+        return [name for name, value in required.items() if not value]
 
 
 @lru_cache

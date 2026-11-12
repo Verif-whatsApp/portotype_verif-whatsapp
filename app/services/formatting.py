@@ -24,6 +24,9 @@ class Messages:
     unverified_title: str
     unverified_body: str
     unsupported: str
+    error: str
+    unreadable_image: str
+    image_error: str
     automated_notice: str
 
 
@@ -52,6 +55,12 @@ FRENCH = Messages(
         "Je ne peux pas traiter cette demande.\n"
         "Transférez-moi le message suspect que vous souhaitez vérifier."
     ),
+    error="Désolé, une erreur technique est survenue. Veuillez réessayer plus tard.",
+    unreadable_image=(
+        "📸 Désolé, nous n'avons pas réussi à lire le texte de cette image.\n"
+        "Vous pouvez aussi me copier-coller le texte du message."
+    ),
+    image_error="📸 Une erreur est survenue lors de l'analyse de l'image.",
     automated_notice="🤖 Réponse automatique : ce robot n'est pas un journaliste.",
 )
 
@@ -98,6 +107,21 @@ def format_unverified(language: str = DEFAULT_LANGUAGE) -> str:
 def format_unsupported(language: str = DEFAULT_LANGUAGE) -> str:
     """Message que le robot ne peut pas traiter (hors sujet, contenu non pris en charge)."""
     return _messages_for(language).unsupported
+
+
+def format_error(language: str = DEFAULT_LANGUAGE) -> str:
+    """Panne technique pendant le traitement."""
+    return _messages_for(language).error
+
+
+def format_unreadable_image(language: str = DEFAULT_LANGUAGE) -> str:
+    """Aucun texte lisible n'a pu être extrait de l'image."""
+    return _messages_for(language).unreadable_image
+
+
+def format_image_error(language: str = DEFAULT_LANGUAGE) -> str:
+    """L'image n'a pas pu être récupérée ou analysée."""
+    return _messages_for(language).image_error
 
 
 def _messages_for(language: str) -> Messages:

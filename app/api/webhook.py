@@ -1,115 +1,104 @@
+"""Webhook WhatsApp : vérification par Meta (GET) et réception des messages (POST)."""
+
 import logging
-from typing import Any
+from functools import lru_cache
+from typing import Annotated
 
-import httpx
-from app.services.whatsapp import send_whatsapp_message
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, Request, Response
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Query, Request
+from fastapi.responses import PlainTextResponse
+from pydantic import ValidationError
+from sqlalchemy.orm import Session, sessionmaker
 
-from app.config import get_settings
+from app.config import Settings, get_settings
 from app.db.session import get_session_factory
-from app.services.formatting import format_response
-from app.services.matching import find_best_match
-from app.services.ocr import extract_text_from_image
+from app.schemas.whatsapp import WebhookPayload
+from app.security import is_valid_signature, tokens_match
+from app.services.bot import MessageDeduplicator, handle_incoming_message
+from app.services.whatsapp import WhatsAppClient
 
 logger = logging.getLogger(__name__)
-router = APIRouter()
+router = APIRouter(tags=["whatsapp"])
 
 
-async def process_and_reply(text: str, sender: str) -> None:
-    """Tâche de fond pour traiter le message et envoyer la réponse."""
-    try:
-        # Utilisation de votre factory de session
-        SessionLocal = get_session_factory()
-        with SessionLocal() as db:
-            match_result = find_best_match(db, text)
-
-        response_text = format_response(match_result)
-        await send_whatsapp_message(sender, response_text)
-    except Exception as e:
-        logger.error(f"Erreur lors du traitement du message : {e}")
-        error_msg = "Désolé, une erreur technique est survenue. Veuillez réessayer plus tard."
-        await send_whatsapp_message(sender, error_msg)
+def get_whatsapp_client(settings: Annotated[Settings, Depends(get_settings)]) -> WhatsAppClient:
+    # Sans identifiants en développement, les réponses sont écrites dans les logs
+    dry_run = not settings.whatsapp_access_token and not settings.is_production
+    return WhatsAppClient(
+        access_token=settings.whatsapp_access_token,
+        phone_number_id=settings.whatsapp_phone_number_id,
+        api_version=settings.whatsapp_api_version,
+        dry_run=dry_run,
+    )
 
 
-async def handle_image_message(media_id: str, sender: str) -> None:
-    """Télécharge l'image depuis Meta, extrait le texte, et lance le matching."""
-    settings = get_settings()
+@lru_cache
+def get_deduplicator() -> MessageDeduplicator:
+    return MessageDeduplicator()
 
-    url_info = f"https://graph.facebook.com/{settings.whatsapp_api_version}/{media_id}"
-    headers = {"Authorization": f"Bearer {settings.whatsapp_access_token}"}
 
-    try:
-        async with httpx.AsyncClient() as client:
-            res_info = await client.get(url_info, headers=headers)
-            res_info.raise_for_status()
-            media_url = res_info.json().get("url")
-
-            if not media_url:
-                raise ValueError("URL de l'image introuvable.")
-
-            res_img = await client.get(media_url, headers=headers)
-            res_img.raise_for_status()
-
-            text = extract_text_from_image(res_img.content)
-
-            if not text:
-                await send_whatsapp_message(
-                    sender, "📸 Désolé, nous n'avons pas réussi à lire le texte de cette image."
-                )
-                return
-
-            await process_and_reply(text, sender)
-
-    except Exception as e:
-        logger.error(f"Erreur lors du traitement de l'image : {e}")
-        await send_whatsapp_message(
-            sender, "📸 Une erreur est survenue lors de l'analyse de l'image."
-        )
+SettingsDep = Annotated[Settings, Depends(get_settings)]
+ClientDep = Annotated[WhatsAppClient, Depends(get_whatsapp_client)]
+SessionFactoryDep = Annotated[sessionmaker[Session], Depends(get_session_factory)]
+DeduplicatorDep = Annotated[MessageDeduplicator, Depends(get_deduplicator)]
 
 
 @router.get("/webhook")
-async def verify_webhook(
-    mode: str = Query(None, alias="hub.mode"),
-    token: str = Query(None, alias="hub.verify_token"),
-    challenge: str = Query(None, alias="hub.challenge"),
-) -> Response:
-    """Vérification du webhook par Meta."""
-    settings = get_settings()
+def verify_webhook(
+    settings: SettingsDep,
+    mode: Annotated[str | None, Query(alias="hub.mode")] = None,
+    token: Annotated[str | None, Query(alias="hub.verify_token")] = None,
+    challenge: Annotated[str | None, Query(alias="hub.challenge")] = None,
+) -> PlainTextResponse:
+    """Vérification demandée par Meta quand on enregistre l'URL du webhook.
 
-    if mode == "subscribe" and token == settings.whatsapp_verify_token:
-        logger.info("Webhook vérifié avec succès par Meta.")
-        return Response(content=challenge, media_type="text/plain")
-    raise HTTPException(status_code=403, detail="Token de vérification invalide")
+    Meta attend le `hub.challenge` en texte brut (pas de JSON) si le jeton est le bon.
+    """
+    if (
+        mode == "subscribe"
+        and challenge is not None
+        and tokens_match(token, settings.whatsapp_verify_token)
+    ):
+        logger.info("Webhook vérifié par Meta")
+        return PlainTextResponse(challenge)
+    logger.warning("Vérification du webhook refusée (mode ou jeton incorrect)")
+    raise HTTPException(status_code=403, detail="Vérification refusée")
 
 
 @router.post("/webhook")
-async def receive_message(request: Request, background_tasks: BackgroundTasks) -> dict[str, Any]:
-    """Réception des messages entrants de WhatsApp."""
-    body = await request.json()
+async def receive_webhook(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    settings: SettingsDep,
+    client: ClientDep,
+    session_factory: SessionFactoryDep,
+    deduplicator: DeduplicatorDep,
+    signature: Annotated[str | None, Header(alias="X-Hub-Signature-256")] = None,
+) -> dict[str, str]:
+    """Réception des messages. Répond 200 tout de suite : le traitement se fait ensuite."""
+    body = await request.body()
+    _authenticate(body, signature, settings)
 
-    if body.get("object") == "whatsapp_business_account":
-        try:
-            entry = body.get("entry", [])[0]
-            changes = entry.get("changes", [])[0]
-            value = changes.get("value", {})
+    try:
+        payload = WebhookPayload.model_validate_json(body)
+    except ValidationError:
+        # Requête authentique mais format inattendu : un 4xx ferait renvoyer Meta en boucle
+        logger.warning("Notification WhatsApp ignorée : format inattendu")
+        return {"status": "ignored"}
 
-            if "messages" in value:
-                message = value["messages"][0]
-                sender = message.get("from")
-                msg_type = message.get("type")
+    for message in payload.incoming_messages():
+        if deduplicator.is_duplicate(message.id):
+            continue
+        background_tasks.add_task(handle_incoming_message, message, client, session_factory)
+    return {"status": "received"}
 
-                if msg_type == "text":
-                    text_content = message["text"]["body"]
-                    logger.info(f"Message reçu de {sender} : {text_content}")
-                    background_tasks.add_task(process_and_reply, text_content, sender)
 
-                elif msg_type == "image":
-                    media_id = message["image"]["id"]
-                    logger.info(f"Image reçue de {sender} (ID: {media_id})")
-                    background_tasks.add_task(handle_image_message, media_id, sender)
-
-        except (IndexError, KeyError) as e:
-            logger.error(f"Erreur de parsing du payload WhatsApp : {e}")
-            return {"status": "ok"}
-
-    return {"status": "ok"}
+def _authenticate(body: bytes, signature: str | None, settings: Settings) -> None:
+    """Refuse toute requête dont la signature (clé secrète de l'app Meta) est invalide."""
+    if not settings.whatsapp_app_secret:
+        if settings.is_production:
+            logger.error("WHATSAPP_APP_SECRET manquant : requête refusée")
+            raise HTTPException(status_code=403, detail="Signature impossible à vérifier")
+        return  # développement : signature non vérifiée (avertissement au démarrage)
+    if not is_valid_signature(body, signature, settings.whatsapp_app_secret):
+        logger.warning("Requête refusée : signature invalide")
+        raise HTTPException(status_code=403, detail="Signature invalide")

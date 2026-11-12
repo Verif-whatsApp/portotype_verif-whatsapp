@@ -1,7 +1,7 @@
 from collections.abc import Iterator
 
 import pytest
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, sessionmaker
 
 from app.db.session import build_engine, init_db
 
@@ -13,4 +13,13 @@ def session() -> Iterator[Session]:
     init_db(engine)
     with Session(engine) as db_session:
         yield db_session
+    engine.dispose()
+
+
+@pytest.fixture
+def session_factory() -> Iterator[sessionmaker[Session]]:
+    """Fabrique de sessions sur une base SQLite en mémoire (utilisable depuis plusieurs threads)."""
+    engine = build_engine("sqlite://")
+    init_db(engine)
+    yield sessionmaker(bind=engine, expire_on_commit=False)
     engine.dispose()
