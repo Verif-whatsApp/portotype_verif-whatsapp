@@ -57,7 +57,7 @@ def create_app() -> FastAPI:
         """Vérifie que le service répond."""
         return {"status": "ok"}
 
-    application.include_router(webhook_router)
+    application.include_router(webhook_router, prefix="/api")
 
     logger.info("Application démarrée (env=%s)", settings.app_env)
     return application
