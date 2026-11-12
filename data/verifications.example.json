@@ -17,5 +17,29 @@
     "explanation": "Ceci est une entrée d'exemple fictive. Une vraie explication nuance l'affirmation en deux ou trois phrases.",
     "source_name": "Exemple fictif (à remplacer)",
     "verified_at": "2026-01-02"
+  },
+  {
+    "claim_text": "Alerte attaque à Doropo ne sortez pas",
+    "verdict": "faux",
+    "explanation": "Aucune attaque n'a été signalée à Doropo à cette date. Les autorités locales ont démenti l'information.",
+    "source_name": "IvoireCheck",
+    "source_url": "https://ivoirecheck.ci/verification-doropo",
+    "language": "fr"
+  },
+  {
+    "claim_text": "Le vaccin contre la polio rend stérile",
+    "verdict": "faux",
+    "explanation": "Aucune étude scientifique ne prouve ce lien. L'OMS a formellement démenti cette rumeur.",
+    "source_name": "Africa Check",
+    "source_url": "https://africacheck.org/fr/vaccin-polio-sterilite",
+    "language": "fr"
+  },
+  {
+    "claim_text": "Nouveau billet de 10000 FCFA",
+    "verdict": "trompeur",
+    "explanation": "La BCEAO a annoncé une nouvelle gamme de billets, mais les visuels qui circulent sont des faux.",
+    "source_name": "Africa Check",
+    "source_url": "https://africacheck.org/fr/billets-bceao",
+    "language": "fr"
   }
 ]
