@@ -1,13 +1,13 @@
 import logging
 
 import httpx
+from app.services.whatsapp import send_whatsapp_message
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, Request, Response
 
 from app.config import settings
 from app.services.formatting import format_verdict_response
 from app.services.matching import find_best_match
 from app.services.ocr import extract_text_from_image
-from app.services.whatsapp import send_whatsapp_message
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
