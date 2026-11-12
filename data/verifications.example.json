@@ -1,0 +1,21 @@
+[
+  {
+    "claim_text": "EXEMPLE FICTIF : une rumeur inventée pour tester le robot de vérification WhatsApp",
+    "claim_variants": [
+      "Exemple fictif : rumeur inventée pour tester le robot WhatsApp"
+    ],
+    "verdict": "faux",
+    "explanation": "Ceci est une entrée d'exemple fictive. Remplacez-la par une vraie vérification avant toute mise en production.",
+    "source_name": "Exemple fictif (à remplacer)",
+    "source_url": "https://example.org/verification-fictive-1",
+    "verified_at": "2026-01-01",
+    "language": "fr"
+  },
+  {
+    "claim_text": "EXEMPLE FICTIF : une autre rumeur inventée, en partie vraie, pour tester le verdict trompeur",
+    "verdict": "trompeur",
+    "explanation": "Ceci est une entrée d'exemple fictive. Une vraie explication nuance l'affirmation en deux ou trois phrases.",
+    "source_name": "Exemple fictif (à remplacer)",
+    "verified_at": "2026-01-02"
+  }
+]
