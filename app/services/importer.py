@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -19,6 +20,9 @@ from sqlalchemy.orm import Session
 from app.models import Verdict, Verification
 
 REQUIRED_FIELDS = ("claim_text", "verdict", "explanation", "source_name", "verified_at")
+
+# Adresses réservées aux exemples : une entrée qui les utilise n'est pas une vraie vérification
+PLACEHOLDER_HOSTS = frozenset({"example.org", "example.com", "example.net"})
 
 
 class KnowledgeBaseError(Exception):
@@ -94,12 +98,66 @@ def parse_entry(entry: object, position: int) -> Verification:
     )
 
 
-def import_verifications(session: Session, entries: Sequence[object]) -> ImportReport:
+def is_placeholder(verification: Verification) -> bool:
+    """Vrai pour une entrée de démonstration (adresse d'exemple ou source se disant fictive)."""
+    host = urlparse(verification.source_url or "").hostname or ""
+    fake_host = any(host == known or host.endswith(f".{known}") for known in PLACEHOLDER_HOSTS)
+    name = verification.source_name.lower()
+    return fake_host or "fictif" in name or "fictive" in name
+
+
+def _conflict_errors(parsed: Sequence[tuple[int, Verification]]) -> list[str]:
+    """Une même affirmation donnée avec deux verdicts différents est une erreur de données."""
+    first_seen: dict[str, tuple[int, Verdict]] = {}
+    errors: list[str] = []
+    for position, verification in parsed:
+        known = first_seen.setdefault(verification.claim_text, (position, verification.verdict))
+        if known[1] is not verification.verdict:
+            errors.append(
+                f"Entrées n°{known[0]} et n°{position} : même affirmation avec des verdicts "
+                f"différents ({known[1].value} / {verification.verdict.value})"
+            )
+    return errors
+
+
+def validate_entries(entries: Sequence[object]) -> list[str]:
+    """Toutes les erreurs du fichier, pas seulement la première (liste vide si tout est valide)."""
+    errors: list[str] = []
+    parsed: list[tuple[int, Verification]] = []
+    for position, entry in enumerate(entries, start=1):
+        try:
+            parsed.append((position, parse_entry(entry, position)))
+        except KnowledgeBaseError as exc:
+            errors.append(str(exc))
+    return errors + _conflict_errors(parsed)
+
+
+def import_verifications(
+    session: Session, entries: Sequence[object], *, allow_placeholder_sources: bool = True
+) -> ImportReport:
     """Ajoute les entrées absentes de la base (clé : texte de l'affirmation).
 
-    Tout ou rien : si une entrée est invalide, rien n'est importé.
+    Tout ou rien : si une entrée est invalide, ou si une même affirmation reçoit deux verdicts
+    différents, rien n'est importé. Avec `allow_placeholder_sources=False` (production), les
+    entrées de démonstration (sources fictives, adresses example.org) sont refusées.
     """
     parsed = [parse_entry(entry, position) for position, entry in enumerate(entries, start=1)]
+    numbered = list(enumerate(parsed, start=1))
+
+    conflicts = _conflict_errors(numbered)
+    if conflicts:
+        raise KnowledgeBaseError("\n".join(conflicts))
+
+    if not allow_placeholder_sources:
+        fake = [position for position, verification in numbered if is_placeholder(verification)]
+        if fake:
+            shown = ", ".join(f"n°{position}" for position in fake[:5])
+            more = f" (et {len(fake) - 5} autres)" if len(fake) > 5 else ""
+            raise KnowledgeBaseError(
+                f"{len(fake)} entrée(s) de démonstration refusée(s) en production : {shown}{more}. "
+                "Elles ont une source fictive ou une adresse example.org : ce ne sont pas de "
+                "vraies vérifications."
+            )
 
     known = set(session.scalars(select(Verification.claim_text)))
     added = skipped = 0
