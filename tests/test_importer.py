@@ -14,8 +14,10 @@ from app.services.formatting import format_response
 from app.services.importer import (
     KnowledgeBaseError,
     import_verifications,
+    is_placeholder,
     load_entries,
     parse_entry,
+    validate_entries,
 )
 from app.services.matching import find_best_match
 from scripts.import_verifications import main
@@ -240,3 +242,86 @@ def test_command_defaults_to_data_verifications_json(
 
     assert main([]) == 1
     assert "data/verifications.json" in capsys.readouterr().err
+
+
+# --- verdicts contradictoires, sources fictives -------------------------------------------
+
+
+def test_same_claim_with_two_verdicts_imports_nothing(session: Session) -> None:
+    entries = [valid_entry(verdict="faux"), valid_entry(verdict="vrai")]
+
+    with pytest.raises(KnowledgeBaseError, match=r"Entrées n°1 et n°2 .*\(faux / vrai\)"):
+        import_verifications(session, entries)
+
+    assert count_rows(session) == 0
+
+
+def test_validate_entries_reports_every_problem() -> None:
+    errors = validate_entries(
+        [
+            valid_entry(verdict="inconnu"),
+            valid_entry(claim_text="B", verdict="faux"),
+            valid_entry(claim_text="B", verdict="vrai"),
+            "pas un objet",
+        ]
+    )
+
+    assert len(errors) == 3
+    assert "Entrée n°1" in errors[0]
+    assert "Entrée n°4" in errors[1]
+    assert "n°2 et n°3" in errors[2]
+
+
+def test_validate_entries_accepts_a_clean_file() -> None:
+    assert validate_entries([valid_entry(), valid_entry(claim_text="Autre")]) == []
+
+
+@pytest.mark.parametrize(
+    ("overrides", "expected"),
+    [
+        ({}, False),
+        ({"source_url": "https://www.africacheck.org/fact-check/x"}, False),
+        ({"source_url": "https://example.org/x"}, True),
+        ({"source_url": "https://docs.example.com/x"}, True),
+        ({"source_name": "Source fictive (test)"}, True),
+        ({"source_name": "Exemple fictif"}, True),
+        ({"source_url": "pas une url"}, False),
+    ],
+)
+def test_is_placeholder(overrides: dict[str, Any], expected: bool) -> None:
+    assert is_placeholder(parse_entry(valid_entry(**overrides), position=1)) is expected
+
+
+def test_real_entries_are_accepted_in_production(session: Session) -> None:
+    report = import_verifications(session, [valid_entry()], allow_placeholder_sources=False)
+
+    assert report.added == 1
+
+
+def test_example_file_is_refused_in_production(session: Session) -> None:
+    with pytest.raises(KnowledgeBaseError, match="2 entrée.* de démonstration refusée"):
+        import_verifications(session, load_entries(EXAMPLE_FILE), allow_placeholder_sources=False)
+
+    assert count_rows(session) == 0
+
+
+def test_production_error_lists_a_few_positions_only(session: Session) -> None:
+    entries = [valid_entry(claim_text=f"A{n}", source_name="Fictive") for n in range(8)]
+
+    with pytest.raises(
+        KnowledgeBaseError, match=r"8 entrée.*n°1, n°2, n°3, n°4, n°5 \(et 3 autres\)"
+    ):
+        import_verifications(session, entries, allow_placeholder_sources=False)
+
+
+def test_command_refuses_demo_data_in_production(
+    database_file: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("APP_ENV", "production")
+    get_settings.cache_clear()
+
+    assert main([str(EXAMPLE_FILE)]) == 1
+
+    assert "refusée(s) en production" in capsys.readouterr().err

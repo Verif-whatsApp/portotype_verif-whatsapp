@@ -1,43 +1,51 @@
-import json
-import logging
+"""Contrôle un fichier de vérifications sans rien importer.
+
+Usage :
+    python scripts/validate_data.py                       # data/verifications.json
+    python scripts/validate_data.py data/autre_fichier.json
+
+Applique exactement les règles de l'import (champs obligatoires, verdict, date AAAA-MM-JJ,
+affirmations en double avec verdicts contradictoires) et affiche TOUTES les erreurs d'un coup.
+Code de sortie : 0 si le fichier est valide, 1 sinon.
+"""
+
+import argparse
+import sys
+from collections.abc import Sequence
 from pathlib import Path
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+from app.services.importer import KnowledgeBaseError, load_entries, parse_entry, validate_entries
 
-VALID_VERDICTS = {"faux", "trompeur", "vrai", "non_verifie"}
+DEFAULT_FILE = Path("data/verifications.json")
 
-def validate() -> None:
-    data_file = Path("data/verifications.json")
-    if not data_file.exists():
-        logger.error(f"Fichier introuvable : {data_file}")
-        return
+
+def main(argv: Sequence[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0] if __doc__ else None)
+    parser.add_argument("file", nargs="?", type=Path, default=DEFAULT_FILE, help="fichier JSON")
+    args = parser.parse_args(argv)
 
     try:
-        with open(data_file, encoding="utf-8") as f:
-            data = json.load(f)
-    except json.JSONDecodeError as e:
-        logger.error(f"❌ Erreur de syntaxe JSON à la ligne {e.lineno}, colonne {e.colno} : {e.msg}")
-        return
+        entries = load_entries(args.file)
+    except KnowledgeBaseError as exc:
+        print(f"❌ {exc}", file=sys.stderr)
+        return 1
 
-    errors = 0
-    for i, item in enumerate(data):
-        # Vérification des champs obligatoires
-        required_fields = ["claim_text", "verdict", "explanation", "source_name"]
-        for field in required_fields:
-            if field not in item or not str(item[field]).strip():
-                logger.error(f"❌ Cas #{i+1} : champ '{field}' manquant ou vide.")
-                errors += 1
-                
-        # Vérification du verdict
-        if item.get("verdict") not in VALID_VERDICTS:
-            logger.error(f"❌ Cas #{i+1} : verdict '{item.get('verdict')}' invalide. Doit être : {VALID_VERDICTS}")
-            errors += 1
+    errors = validate_entries(entries)
+    if errors:
+        for error in errors:
+            print(f"❌ {error}", file=sys.stderr)
+        print(
+            f"⚠️ {len(errors)} erreur(s) : corrigez le fichier avant de l'importer.", file=sys.stderr
+        )
+        return 1
 
-    if errors == 0:
-        logger.info(f"✅ Super ! Les {len(data)} vérifications sont valides et prêtes à être importées.")
-    else:
-        logger.warning(f"⚠️ {errors} erreur(s) trouvée(s). Corrigez le fichier avant d'importer.")
+    claims = {parse_entry(entry, position).claim_text for position, entry in enumerate(entries, 1)}
+    duplicates = len(entries) - len(claims)
+    print(f"✅ {len(entries)} entrée(s) valides, {len(claims)} affirmation(s) distincte(s).")
+    if duplicates:
+        print(f"ℹ️ {duplicates} doublon(s) exact(s) : ils seront ignorés à l'import.")
+    return 0
+
 
 if __name__ == "__main__":
-    validate()
+    raise SystemExit(main())

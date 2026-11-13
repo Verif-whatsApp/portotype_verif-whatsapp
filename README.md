@@ -203,14 +203,30 @@ FastAPI génère automatiquement la documentation interactive :
 
 ### Importer la base de connaissances
 
-Le fichier JSON contient une liste de vérifications (voir [`data/verifications.example.json`](data/verifications.example.json) pour le format). L'import est répétable : les affirmations déjà présentes sont ignorées, et une entrée invalide annule tout l'import avec un message précis.
+Le fichier JSON contient une liste de vérifications (voir
+[`data/verifications.example.json`](data/verifications.example.json) pour le format). Contrôlez-le
+d'abord : la commande applique exactement les règles de l'import et affiche **toutes** les erreurs
+d'un coup (champ manquant, verdict inconnu, date invalide, même affirmation avec deux verdicts).
 
 ```bash
-python scripts/import_verifications.py                  # data/verifications.json
-python scripts/import_verifications.py data/autre_fichier.json
+python scripts/validate_data.py data/verifications.json    # contrôle, n'importe rien
+python scripts/import_verifications.py data/verifications.json
 ```
 
-> ⚠️ `data/verifications.example.json` ne contient que des **entrées fictives**, pour tester. La vraie base (`data/verifications.json`) doit contenir des vérifications réelles, chacune avec sa source.
+L'import est répétable : les affirmations déjà présentes sont ignorées, et une entrée invalide
+annule tout l'import avec un message précis. `data/verifications.json` est la **vraie** base (des
+vérifications réelles, chacune avec sa source) : elle n'existe pas encore dans le dépôt.
+
+### Données de test (fictives)
+
+Pour tester sans vraie base, deux fichiers fictifs sont fournis : `data/verifications.example.json`
+(2 entrées) et `data/verifications.mock.json` (110 affirmations générées par
+`python scripts/generate_mock_data.py`).
+
+> ⚠️ Ces entrées sont **inventées** : verdicts tirés au hasard, source « fictive », adresses
+> `example.org`. Ne leur attribuez jamais le nom d'une vraie organisation de fact-checking.
+> Avec `APP_ENV=production`, l'import les **refuse**, et un test empêche de les commiter sous
+> le nom `data/verifications.json`.
 
 ## Connecter WhatsApp
 
@@ -260,7 +276,7 @@ Sans `WHATSAPP_ACCESS_TOKEN` (et hors production), le robot écrit ses réponses
 serveur au lieu de les envoyer. Le simulateur envoie un message signé comme le ferait Meta :
 
 ```bash
-python scripts/import_verifications.py data/verifications.example.json
+python scripts/import_verifications.py data/verifications.mock.json    # ou ...example.json
 make run                                  # dans un premier terminal
 python scripts/simulate_webhook.py "EXEMPLE FICTIF : une rumeur inventée pour tester le robot de vérification WhatsApp"
 ```
@@ -327,10 +343,13 @@ portotype_verif-whatsapp/
 │       ├── base.py                 # Base déclarative
 │       └── session.py              # Connexion base de données
 ├── data/
-│   ├── verifications.example.json  # Exemple FICTIF du format
+│   ├── verifications.example.json  # Exemple FICTIF du format (2 entrées)
+│   ├── verifications.mock.json     # Données de test FICTIVES (110 affirmations)
 │   └── verifications.json          # 🚧 Vraie base de connaissances (500 cas visés)
 ├── scripts/
 │   ├── import_verifications.py     # Import des données
+│   ├── validate_data.py            # Contrôle d'un fichier sans l'importer
+│   ├── generate_mock_data.py       # Génère des données de test fictives
 │   └── simulate_webhook.py         # Simule un message WhatsApp (sans compte Meta)
 ├── tests/                          # Tests unitaires et d'intégration
 ├── .env.example
